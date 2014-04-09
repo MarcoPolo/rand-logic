@@ -331,7 +331,7 @@
          (u32bit-adder 0 A+F+K M_g A+F+K+M _dc3)
          (left-rotateo A+F+K+M s_i lrotted)
 
-         (project [A+F+K] (do (simple-log "afkm is: " (bitvec->hex A+F+K) "\n") s#))
+         (project [A+F+K+M] (do (simple-log "afkm is: " (bitvec->hex A+F+K+M) "\n") s#))
          (project [K_i] (do (simple-log "K is: " (bitvec->hex K_i) "\n") s#))
          (project [i s_i] (do (simple-log "i is: " i " and s_i is " s_i  "\n") s#))
          (project [g s_i] (do (simple-log "g is: " g " and s_i is " s_i  "\n") s#))
@@ -339,7 +339,10 @@
          (u32bit-adder 0 B lrotted new-B _dc4)))
 
 
-(def M (repeat 16 (repeat 32 0)))
+(def M
+  (concat
+   [(int->bitvec 0x80)]
+   (repeat 15 (repeat 32 0))))
 
 (comment
   (bitvec->hex
@@ -358,6 +361,13 @@
                      (int->bitvec 0xffffffff)
                      ;(int->bitvec 0xd76aa478)
                      q t1)))
+
+((comp bitvec->hex first)
+ (run 1 [q]
+      (left-rotateo (int->bitvec 0xd76aa478) 7 q)))
+
+(int->bitvec 0x0a724207)
+(int->bitvec 0xd76aa478)
 
 #_(->
  (run 1 [t5 t0 B t1 t2 t3 t4 _dc1 _dc2 _dc3 _dc4]
@@ -440,13 +450,13 @@
    (fd/in pass-number (fd/interval 0 65))
    (fd/<= 0 pass-number)
    (conde
-    [(== pass-number 4)
+    [(== pass-number 64)
      (all
       (== A final-A)
       (== B final-B)
       (== C final-C)
       (== D final-D))]
-    [(fd/< pass-number 4)
+    [(fd/< pass-number 64)
      (fresh [next-pass next-A next-B next-C next-D]
             (fd/+ pass-number 1 next-pass)
             (fd/in next-pass (fd/interval 0 65))
@@ -468,11 +478,23 @@
                           final-A final-B final-C final-D)
             )])))
 
-(run 1 [A B C D]
-     ;(I-fn initial-B initial-C initial-D t1)
-     ;(B-transform initial-B initial-A )
-     (M-chunk-hash 0 M
-                initial-A initial-B initial-C initial-D
-                A B C D))
+(def result
+  (run 1 [A B C D]
+       ;(I-fn initial-B initial-C initial-D t1)
+       ;(B-transform initial-B initial-A )
+       (M-chunk-hash 0 M
+                     initial-A initial-B initial-C initial-D
+                     A B C D)))
 
+
+(map (comp bitvec->hex first)
+     (map
+      #(run 1 [q]
+            (fresh [a] (u32bit-adder 0 %1 %2 q a)))
+      (first result)
+      [initial-A initial-B initial-C initial-D])
+     )
+
+
+(map bitvec->hex (-> result first))
 
