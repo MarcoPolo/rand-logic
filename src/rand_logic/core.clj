@@ -5,7 +5,10 @@
             [clojure.math.numeric-tower :as m]
             [clojure.core.logic.arithmetic :as arith]))
 
-
+(defn simple-log [& args]
+  (spit "/tmp/log.log"
+        (apply str args)
+        :append true))
 
 (defn pad-bit-length-32 [bits]
   (if-not (= 32 (count bits))
@@ -16,15 +19,17 @@
     bits))
 
 (defn int->bitvec [n]
-  (loop [n n
-         bits '()]
-    (if (even? n)
-      (recur  (/ n 2)
-              (conj bits 0))
-      (if (= 1 n)
-        (pad-bit-length-32 (vec (conj bits 1)))
-        (recur (/ (dec n) 2)
-               (conj bits 1))))))
+  (if (zero? n)
+    (pad-bit-length-32 [0])
+    (loop [n n
+           bits '()]
+      (if (even? n)
+        (recur  (/ n 2)
+                (conj bits 0))
+        (if (= 1 n)
+          (pad-bit-length-32 (vec (conj bits 1)))
+          (recur (/ (dec n) 2)
+                 (conj bits 1)))))))
 
 (def two32 (m/expt 2N 32))
 
@@ -43,6 +48,12 @@
            (fd/< modulus dividend)
            (fd/quot y dividend z)
            (fd/- dividend j modulus))]))
+
+(run 2 [q]
+     (modo 121 16 q)
+     )
+
+(/ 112 16)
 
 (defn bit-ando [u v w]
   (conde
@@ -111,9 +122,9 @@
           b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 b16 b17 b18 b19 b20 b21 b22 b23 b24 b25 b26 b27 b28 b29 b30 b31
           t0 t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12 t13 t14 t15 t16 t17 t18 t19 t20 t21 t22 t23 t24 t25 t26 t27 t28 t29 t30
           c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16 c17 c18 c19 c20 c21 c22 c23 c24 c25 c26 c27 c28 c29 c30 c31]
-         (== bits1 [a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31])
-         (== bits2 [b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 b16 b17 b18 b19 b20 b21 b22 b23 b24 b25 b26 b27 b28 b29 b30 b31])
-         (== sbits [c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16 c17 c18 c19 c20 c21 c22 c23 c24 c25 c26 c27 c28 c29 c30 c31])
+         (== bits1 [a31 a30 a29 a28 a27 a26 a25 a24 a23 a22 a21 a20 a19 a18 a17 a16 a15 a14 a13 a12 a11 a10 a9 a8 a7 a6 a5 a4 a3 a2 a1 a0])
+         (== bits2 [b31 b30 b29 b28 b27 b26 b25 b24 b23 b22 b21 b20 b19 b18 b17 b16 b15 b14 b13 b12 b11 b10 b9 b8 b7 b6 b5 b4 b3 b2 b1 b0])
+         (== sbits [c31 c30 c29 c28 c27 c26 c25 c24 c23 c22 c21 c20 c19 c18 c17 c16 c15 c14 c13 c12 c11 c10 c9 c8 c7 c6 c5 c4 c3 c2 c1 c0])
          (bit-addero cin a0 b0 c0 t0)
          (bit-addero t0 a1 b1 c1 t1)
          (bit-addero t1 a2 b2 c2 t2)
@@ -217,7 +228,8 @@
 
 (comment
   (run 5 [q]
-       (ntho [1 2 3 4] q 4)))
+       (ntho [1 2 3 4] 2 q))
+  )
 
 
 (def s
@@ -251,6 +263,19 @@
 (def initial-C (int->bitvec 0x98badcfe))
 (def initial-D (int->bitvec 0x10325476))
 
+(format "%x" (bitvec->int initial-A))
+(format "%x" (bitvec->int initial-D))
+
+(partition 2 initial-A)
+(format "%x" (bitvec->int [1 0]))
+
+(defn bitvec->hex [bitvec]
+  (apply str
+         (reverse (map #(format "%02x" (bitvec->int %)) (partition 8 bitvec)))))
+
+
+(bitvec->hex initial-A)
+(bitvec->hex initial-A)
 
 (defn left-rotateo [bits cnt out-bits]
   (all
@@ -306,28 +331,52 @@
          (u32bit-adder 0 A+F+K M_g A+F+K+M _dc3)
          (left-rotateo A+F+K+M s_i lrotted)
 
+         (project [A+F+K] (do (simple-log "afkm is: " (bitvec->hex A+F+K) "\n") s#))
+         (project [K_i] (do (simple-log "K is: " (bitvec->hex K_i) "\n") s#))
+         (project [i s_i] (do (simple-log "i is: " i " and s_i is " s_i  "\n") s#))
+         (project [g s_i] (do (simple-log "g is: " g " and s_i is " s_i  "\n") s#))
+
          (u32bit-adder 0 B lrotted new-B _dc4)))
 
-(run 1 [q]
-     (ntho s 0 q)
-     )
 
 (def M (repeat 16 (repeat 32 0)))
 
-(run 1 [A B C D t1 t2 t3 t4]
-     (all
-      (F-fn initial-B initial-C initial-D t1)
-      (B-transform initial-B initial-A t1 0 0 M B )
-      (ntho K 0 t2)
-      (ntho M 0 t3)
-      (ntho s 0 t4)
+(comment
+  (bitvec->hex
+   (ffirst
+    (run 1 [q t1]
+         (u32bit-adder 0
+                       (int->bitvec 0xffffffff)
+                       ;(int->bitvec 0x0)
+                       (int->bitvec 0xffffffff)
+                       ;(int->bitvec 0xd76aa478)
+                       q t1))))
+  (run 1 [q t1]
+       (u32bit-adder 0
+                     (int->bitvec 0xffffffff)
+                     ;(int->bitvec 0x0)
+                     (int->bitvec 0xffffffff)
+                     ;(int->bitvec 0xd76aa478)
+                     q t1)))
 
-      #_(el-passo2 0 M
-                   initial-A initial-B initial-C initial-D
-                   A B C D)))
+#_(->
+ (run 1 [t5 t0 B t1 t2 t3 t4 _dc1 _dc2 _dc3 _dc4]
+      (all
+       (F-fn initial-B initial-C initial-D t1)
+       (u32bit-adder 0 initial-A t1 t0 _dc1)
+       (u32bit-adder 0 t1 )
+       (B-transform initial-B initial-A t1 0 0 M B)
+
+       ))
+ first first bitvec->hex)
 
 (defn el-passo [pass-number M A B C D new-A new-B new-C new-D]
   (fresh [F g]
+
+         (fd/in g (fd/interval 0 65))
+         (project [pass-number]
+                  (do (simple-log "El-passo: " pass-number "\n")
+                    s#))
          (conde
           [(fd/<= 0 pass-number)
            (fd/<= pass-number 15)
@@ -337,6 +386,7 @@
            (fd/<= pass-number 31)
            (G-fn B C D F)
            (fresh [t1 t2]
+                  (fd/in t1 t2 (fd/interval 0 680))
                   (fd/* 5 pass-number t1)
                   (fd/+ t1 1 t2)
                   (modo t2 16 g))]
@@ -353,10 +403,13 @@
            (fresh [t1]
                   (fd/* 7 pass-number t1)
                   (modo t1 16 g))])
+
          (== new-D C)
          (== new-C B)
          (== new-A D)
          (B-transform B A F pass-number g M new-B)
+         (project [g] (do (simple-log "g is: " g  "\n") s#))
+         ;(== new-B A)
          ))
 
 
@@ -375,65 +428,50 @@
         n))))
 
 
-(defn simple-log [& args]
-  (spit "/tmp/log.log"
-        (apply str args)
-        :append true))
+(defn test-unify [pass-number M A B C D nA nB nC nD]
+  (all
+   (== A nA)
+   (== B nB)
+   (== C nC)
+   (== D nD)))
 
 (defn M-chunk-hash [pass-number M A B C D final-A final-B final-C final-D]
   (all
    (fd/in pass-number (fd/interval 0 65))
    (fd/<= 0 pass-number)
-   (project [pass-number A B C D]
-            (do
-              (when true (= 19 pass-number)
-                (simple-log
-                 "first pass number: " pass-number "\t"
-                 #_(pr-str (map bitvec->int [A B C D]))
-                 " "
-                 #_(pr-str (map bitvec->int M))
-                 "\n"))
-
-              s#))
    (conde
-    [(== pass-number 25)
-     (== A final-A)
-     (== B final-B)
-     (== C final-C)
-     (== D final-D)
-     #_(project [final-A final-B final-C final-D]
-              (do (simple-log "Done            "
-                              (pr-str
-                               (map bitvec->int [final-A final-B final-C final-D]))
-                              "\n")
-                s#))]
-    [(fd/< pass-number 25)
+    [(== pass-number 4)
+     (all
+      (== A final-A)
+      (== B final-B)
+      (== C final-C)
+      (== D final-D))]
+    [(fd/< pass-number 4)
      (fresh [next-pass next-A next-B next-C next-D]
             (fd/+ pass-number 1 next-pass)
             (fd/in next-pass (fd/interval 0 65))
-            (el-passo pass-number M A B C D next-A next-B next-C next-D)
-            (project [pass-number next-pass]
+            #_(test-unify pass-number M A B C D next-A next-B next-C next-D)
+            (project [pass-number A B C D]
                      (do
                        (when true (= 19 pass-number)
                          (simple-log
-                          "pass number: " pass-number "\t" next-pass "\n"))
+                          "pass number: " pass-number "\n"
+                          "bits: " (pr-str
+                                    (map bitvec->hex  [A B C D]))
+                          "\n"
+                          "\n"
+                          ))
                        s#))
+            (el-passo pass-number M A B C D next-A next-B next-C next-D)
             (M-chunk-hash next-pass M
                           next-A next-B next-C next-D
-                          final-A final-B final-C final-D))])))
-
-
-(run 1 [A B C D]
-     ;(I-fn initial-B initial-C initial-D t1)
-     ;(B-transform initial-B initial-A )
-     (M-chunk-hash 23 M
-                initial-A initial-B initial-C initial-D
-                A B C D))
+                          final-A final-B final-C final-D)
+            )])))
 
 (run 1 [A B C D]
      ;(I-fn initial-B initial-C initial-D t1)
      ;(B-transform initial-B initial-A )
-     (el-passo 23 M
+     (M-chunk-hash 0 M
                 initial-A initial-B initial-C initial-D
                 A B C D))
 
