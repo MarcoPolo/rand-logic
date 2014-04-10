@@ -10,6 +10,17 @@
         (apply str args)
         :append true))
 
+(defn bitvec->int [bits]
+  (loop [pow2 0
+         bits bits
+         n 0]
+    (let [bit (last bits)]
+      (if (seq bits)
+        (recur (inc pow2)
+               (butlast bits)
+               (+ n (* bit (m/expt 2 pow2))))
+        n))))
+
 (defn pad-bit-length-32 [bits]
   (if-not (= 32 (count bits))
     (vec
@@ -263,12 +274,6 @@
 (def initial-C (int->bitvec 0x98badcfe))
 (def initial-D (int->bitvec 0x10325476))
 
-(format "%x" (bitvec->int initial-A))
-(format "%x" (bitvec->int initial-D))
-
-(partition 2 initial-A)
-(format "%x" (bitvec->int [1 0]))
-
 (defn bitvec->hex [bitvec]
   (apply str
          (reverse (map #(format "%02x" (bitvec->int %)) (partition 8 bitvec)))))
@@ -331,10 +336,10 @@
          (u32bit-adder 0 A+F+K M_g A+F+K+M _dc3)
          (left-rotateo A+F+K+M s_i lrotted)
 
-         (project [A+F+K+M] (do (simple-log "afkm is: " (bitvec->hex A+F+K+M) "\n") s#))
-         (project [K_i] (do (simple-log "K is: " (bitvec->hex K_i) "\n") s#))
-         (project [i s_i] (do (simple-log "i is: " i " and s_i is " s_i  "\n") s#))
-         (project [g s_i] (do (simple-log "g is: " g " and s_i is " s_i  "\n") s#))
+         #_(project [A+F+K+M] (do (simple-log "afkm is: " (bitvec->hex A+F+K+M) "\n") s#))
+         #_(project [K_i] (do (simple-log "K is: " (bitvec->hex K_i) "\n") s#))
+         #_(project [i s_i] (do (simple-log "i is: " i " and s_i is " s_i  "\n") s#))
+         #_(project [g s_i] (do (simple-log "g is: " g " and s_i is " s_i  "\n") s#))
 
          (u32bit-adder 0 B lrotted new-B _dc4)))
 
@@ -418,24 +423,13 @@
          (== new-C B)
          (== new-A D)
          (B-transform B A F pass-number g M new-B)
-         (project [g] (do (simple-log "g is: " g  "\n") s#))
+         #_(project [g] (do (simple-log "g is: " g  "\n") s#))
          ;(== new-B A)
          ))
 
 
 ; 512-bit chunk of message
 ; break chunk into sixteen 32-bit words M[j], 0 ≤ j ≤ 15
-
-(defn bitvec->int [bits]
-  (loop [pow2 0
-         bits bits
-         n 0]
-    (let [bit (last bits)]
-      (if (seq bits)
-        (recur (inc pow2)
-               (butlast bits)
-               (+ n (* bit (m/expt 2 pow2))))
-        n))))
 
 
 (defn test-unify [pass-number M A B C D nA nB nC nD]
@@ -461,7 +455,7 @@
             (fd/+ pass-number 1 next-pass)
             (fd/in next-pass (fd/interval 0 65))
             #_(test-unify pass-number M A B C D next-A next-B next-C next-D)
-            (project [pass-number A B C D]
+            #_(project [pass-number A B C D]
                      (do
                        (when true (= 19 pass-number)
                          (simple-log
@@ -478,23 +472,114 @@
                           final-A final-B final-C final-D)
             )])))
 
-(def result
+(defn M-hash [M a0 b0 c0 d0 final-A final-B final-C final-D]
+  (all
+         #_(project [M M-chunk a0 b0 c0 d0] (do (simple-log
+                              "hey" (empty? M) (pr-str M) a0 "\n"
+                              b0 "\n"
+                              c0 "\n"
+                              d0 "\n"
+                              final-A "\n"
+                              final-B "\n"
+                              final-C "\n"
+                              final-D "\n"
+                              ) s#))
+
+         (conde
+          [(emptyo M)
+           (all
+            (== a0 final-A)
+            (== b0 final-B)
+            (== c0 final-C)
+            (== d0 final-D))]
+          [(!= M [])
+           (!= M '())
+           (fresh [next-A next-B next-C next-D _dc1 _dc2 _dc3 _dc4
+                   nnext-A nnext-B nnext-C nnext-D
+                   M-chunk M-rest]
+                  (firsto M M-chunk)
+                  (resto M M-rest)
+                  (M-chunk-hash 0 M-chunk a0 b0 c0 d0
+                                next-A next-B next-C next-D)
+                  (u32bit-adder 0 a0 next-A nnext-A _dc1)
+                  (u32bit-adder 0 b0 next-B nnext-B _dc2)
+                  (u32bit-adder 0 c0 next-C nnext-C _dc3)
+                  (u32bit-adder 0 d0 next-D nnext-D _dc4)
+                  (M-hash M-rest
+                          nnext-A nnext-B nnext-C nnext-D
+                          final-A final-B final-C final-D))])))
+
+(count M)
+M
+
+(def j [M])
+
+(comment
+  (def result1
+    (first
+     (run 1 [A B C D]
+          (M-hash j
+                  A B C D
+                  (result 0)
+                  (result 1)
+                  (result 2)
+                  (result 3)))))
+  )
+
+
+(comment
+  (result 1)
+  (def result
+    (first
+     (run 1 [A B C D]
+          (M-hash j
+                  initial-A initial-B initial-C initial-D
+                  A B C D))))
+
+(map bitvec->hex
+     (first
+      (run 1 [A B C D]
+           (M-hash j
+                   initial-A initial-B initial-C initial-D
+                   A B C D))))
+
+  (def result
+    (first
+     (run 1 [A B C D]
+          ;(I-fn initial-B initial-C initial-D t1)
+          ;(B-transform initial-B initial-A )
+          (M-chunk-hash 0 M
+                        initial-A initial-B initial-C initial-D
+                        A B C D)))
+    )
+
+  result
   (run 1 [A B C D]
-       ;(I-fn initial-B initial-C initial-D t1)
-       ;(B-transform initial-B initial-A )
        (M-chunk-hash 0 M
                      initial-A initial-B initial-C initial-D
-                     A B C D)))
+                     A B C D))
+
+    (run 1 [q]
+         (fresh [_dc]
+                (u32bit-adder
+                 0
+                 (int->bitvec 0x1)
+                 q
+                 (int->bitvec 0xffffffff)
+                 _dc  )) )
+    )
+
+  (run 1 [q]
+       (modo q 4 q ))
+
+  (map (comp bitvec->hex first)
+       (map
+        #(run 1 [q]
+              (fresh [a] (u32bit-adder 0 %1 %2 q a)))
+        (first result)
+        [initial-A initial-B initial-C initial-D])
+       )
 
 
-(map (comp bitvec->hex first)
-     (map
-      #(run 1 [q]
-            (fresh [a] (u32bit-adder 0 %1 %2 q a)))
-      (first result)
-      [initial-A initial-B initial-C initial-D])
-     )
-
-
-(map bitvec->hex (-> result first))
+  (map bitvec->hex (-> result first)))
 
