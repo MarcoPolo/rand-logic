@@ -592,10 +592,34 @@
             )])))
 
 
-(let [new-A (result 0) new-B (result 1) new-C (result 2) new-D (result 3)]
-  (run 1 [A B C D]
-       #_(el-passo-rev 0 M A B C D new-A new-B new-C new-D)
-       (M-chunk-hash-rev 63 M A B C D new-A new-B new-C new-D)))
+(comment
+  (def unhashed-result
+    (first
+     (let [new-A (result 0) new-B (result 1) new-C (result 2) new-D (result 3)]
+       (run 1 [A B C D]
+            #_(el-passo-rev 0 M A B C D new-A new-B new-C new-D)
+            (M-chunk-hash-rev 63 M A B C D new-A new-B new-C new-D)))))
+
+
+  hashed-unhashed
+           result
+  unhashed-result
+
+  (= hashed-unhashed result)
+
+  (def hashed-unhashed
+    (first
+     (let [init-A (unhashed-result 0)
+           init-B (unhashed-result 1)
+           init-C (unhashed-result 2)
+           init-D (unhashed-result 3)]
+       (run 1 [A B C D]
+            (M-chunk-hash 0 M init-A init-B init-C init-D A B C D)))))
+
+
+  )
+
+
 
 
 (defn M-hash [M a0 b0 c0 d0 final-A final-B final-C final-D]
