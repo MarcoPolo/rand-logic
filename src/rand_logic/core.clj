@@ -269,6 +269,7 @@
         0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1
         0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391]))
 
+
 (def initial-A (int->bitvec 0x67452301))
 (def initial-B (int->bitvec 0xefcdab89))
 (def initial-C (int->bitvec 0x98badcfe))
@@ -342,6 +343,33 @@
          #_(project [g s_i] (do (simple-log "g is: " g " and s_i is " s_i  "\n") s#))
 
          (u32bit-adder 0 B lrotted new-B _dc4)))
+
+(defn B-transform-rev [B A F i g M new-B]
+  (fresh [A+F A+F+K A+F+K+M K_i M_g s_i lrotted _dc1 _dc2 _dc3 _dc4]
+         (fd/in i (fd/interval 0 64))
+         (ntho K i K_i)
+         (ntho M g M_g)
+         (ntho s i s_i)
+         (project [i s_i] (do (simple-log "i is: " i " and s_i is " s_i  "\n") s#))
+         (u32bit-adder 0 B lrotted new-B _dc4)
+         (left-rotateo A+F+K+M s_i lrotted)
+         (u32bit-adder 0 A+F+K M_g A+F+K+M _dc3)
+         (u32bit-adder 0 A+F K_i A+F+K _dc2)
+         (u32bit-adder 0 A F A+F _dc1)))
+
+#_(let [new-A (result 0) new-B (result 1) new-C (result 2) new-D (result 3)]
+  (run 1 [A B C D F g pass-number]
+       (== pass-number 0)
+       (== g pass-number)
+       #_(el-passo-rev 0 M A B C D new-A new-B new-C new-D)
+
+       (== new-D C)
+       (== new-C B)
+       (== new-A D)
+       (F-fn B C D F)
+       (B-transform-rev B A F pass-number g M new-B)
+
+       ))
 
 
 (def M
@@ -427,6 +455,64 @@
          ;(== new-B A)
          ))
 
+(defn el-passo-rev [pass-number M A B C D new-A new-B new-C new-D]
+  (fresh [F g]
+         (== new-D C)
+         (== new-C B)
+         (== new-A D)
+
+
+         (fd/in g (fd/interval 0 65))
+         (project [pass-number]
+                  (do (simple-log "El-passo: " pass-number "\n")
+                    s#))
+         (conde
+          [(fd/<= 0 pass-number)
+           (fd/<= pass-number 15)
+           (F-fn B C D F)
+           (== g pass-number)]
+          [(fd/<= 16 pass-number)
+           (fd/<= pass-number 31)
+           (G-fn B C D F)
+           (fresh [t1 t2]
+                  (fd/in t1 t2 (fd/interval 0 680))
+                  (fd/* 5 pass-number t1)
+                  (fd/+ t1 1 t2)
+                  (modo t2 16 g))]
+          [(fd/<= 32 pass-number)
+           (fd/<= pass-number 47)
+           (H-fn B C D F)
+           (fresh [t1 t2]
+                  (fd/* 3 pass-number t1)
+                  (fd/+ t1 5 t2)
+                  (modo t2 16 g))]
+          [(fd/<= 48 pass-number)
+           (fd/<= pass-number 63)
+           (I-fn B C D F)
+           (fresh [t1]
+                  (fd/* 7 pass-number t1)
+                  (modo t1 16 g))])
+         (B-transform-rev B A F pass-number g M new-B)
+         #_(project [g] (do (simple-log "g is: " g  "\n") s#))
+         ;(== new-B A)
+         ))
+
+(defn u32-bito [l]
+  (== l (repeatedly 32 lvar)))
+
+
+#_(let [new-A (result 0) new-B (result 1) new-C (result 2) new-D (result 3)]
+  (run 1 [A B C D]
+       (el-passo-rev 0 M A B C D new-A new-B new-C new-D)
+
+       ;(== new-D C)
+       ;(== new-C B)
+       ;(== new-A D)
+       ;(F-fn B C D F)
+       ;(== g pass-number)
+       ;(B-transform B A F pass-number g M new-B)
+
+       ))
 
 ; 512-bit chunk of message
 ; break chunk into sixteen 32-bit words M[j], 0 ≤ j ≤ 15
@@ -471,6 +557,46 @@
                           next-A next-B next-C next-D
                           final-A final-B final-C final-D)
             )])))
+
+(defn M-chunk-hash-rev [pass-number M A B C D final-A final-B final-C final-D]
+  (fresh [next-pass]
+   (fd/in pass-number next-pass (fd/interval -1 65))
+   (conde
+    [(== pass-number -1)
+     (all
+      (== A final-A)
+      (== B final-B)
+      (== C final-C)
+      (== D final-D))]
+    [(fd/< pass-number 64)
+     (fd/>= pass-number 0)
+     (fresh [prev-A prev-B prev-C prev-D]
+            (fd/- pass-number 1 next-pass)
+            #_(test-unify pass-number M prev-A prev-B prev-C prev-D final-A final-B final-C final-D)
+            (project [pass-number next-pass]
+                     (do
+                       (when true (= 19 pass-number)
+                         (simple-log
+                          "pass number: " pass-number " " next-pass "\n"
+                          "bits: " #_(pr-str
+                                    (map bitvec->hex  [A B C D]))
+                          "\n"
+                          "\n"
+                          ))
+                       s#))
+
+            (el-passo-rev pass-number M prev-A prev-B prev-C prev-D final-A final-B final-C final-D)
+            (M-chunk-hash-rev next-pass M
+                          A B C D
+                          prev-A prev-B prev-C prev-D)
+            )])))
+
+
+(let [new-A (result 0) new-B (result 1) new-C (result 2) new-D (result 3)]
+  (run 1 [A B C D]
+       #_(el-passo-rev 0 M A B C D new-A new-B new-C new-D)
+       (M-chunk-hash-rev 63 M A B C D new-A new-B new-C new-D)))
+
 
 (defn M-hash [M a0 b0 c0 d0 final-A final-B final-C final-D]
   (all
@@ -518,12 +644,10 @@ M
   (def result1
     (first
      (run 1 [A B C D]
-          (M-hash j
+          (M-hash [M]
                   A B C D
-                  (result 0)
-                  (result 1)
-                  (result 2)
-                  (result 3)))))
+                  (result 0) (result 1) (result 2) (result 3)
+                  ))))
   )
 
 
@@ -543,7 +667,7 @@ M
                    initial-A initial-B initial-C initial-D
                    A B C D))))
 
-  (def result
+  (def blank-result
     (first
      (run 1 [A B C D]
           ;(I-fn initial-B initial-C initial-D t1)
@@ -553,11 +677,19 @@ M
                         A B C D)))
     )
 
-  result
+        result
+  blank-result
+
   (run 1 [A B C D]
        (M-chunk-hash 0 M
-                     initial-A initial-B initial-C initial-D
-                     A B C D))
+                     A B C D
+                     (result 0) (result 1) (result 2) (result 3)
+                     ))
+
+  (run 1 [A B C D]
+       (el-passo 63 M
+                 A B C D
+                 (result 0) (result 1) (result 2) (result 3) ))
 
     (run 1 [q]
          (fresh [_dc]
